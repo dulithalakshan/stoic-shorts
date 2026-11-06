@@ -9,7 +9,7 @@ Env vars:
   PIXABAY_API_KEY       (optional; stock footage. With neither key: dark animated background)
   YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN   (needed for --upload)
   YT_PRIVACY            public | unlisted | private   (default: public)
-  GEMINI_MODEL          default: gemini-2.5-flash
+  GEMINI_MODEL          default: gemini-flash-latest (auto-falls back)
   TTS_VOICE             default: en-US-ChristopherNeural
 """
 import argparse, asyncio, json, os, random, re, subprocess, sys, datetime, pathlib, shutil
@@ -65,7 +65,7 @@ def gemini_script(history):
     key = os.getenv("GEMINI_API_KEY")
     if not key:
         return None
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
     recent = [h["topic"] for h in history[-60:]]
     prompt = f"""You write scripts for a YouTube Shorts channel about stoicism and discipline.
 Tone: calm, deep, serious, masculine-neutral, no cringe, no emojis, no hashtags in the script.
@@ -82,21 +82,33 @@ Return JSON with keys:
  "description": 1-2 sentence description,
  "tags": list of 8 short tags,
  "keywords": list of 4 short stock-footage search phrases (cinematic, moody, no faces needed)."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseMimeType": "application/json", "temperature": 1.0},
     }
-    try:
-        r = requests.post(url, params={"key": key}, json=body, timeout=60)
-        r.raise_for_status()
-        text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-        data = json.loads(text)
-        assert 30 <= len(data["script"].split()) <= 95
-        return data
+    base = "https://generativelanguage.googleapis.com/v1beta"
+    candidates = [model, "gemini-flash-latest", "gemini-flash-lite-latest"]
+    try:  # also discover whatever flash models this key can use right now
+        lst = requests.get(f"{base}/models", params={"key": key, "pageSize": 200}, timeout=30).json()
+        found = [m["name"].split("/", 1)[1] for m in lst.get("models", [])
+                 if "generateContent" in m.get("supportedGenerationMethods", [])
+                 and "flash" in m["name"] and not re.search(r"image|tts|audio|live|exp|preview", m["name"])]
+        candidates += sorted(found, reverse=True)
     except Exception as e:  # noqa: BLE001
-        print("Gemini failed, using fallback script:", e, file=sys.stderr)
-        return None
+        print("Gemini model list failed:", e, file=sys.stderr)
+    for m in dict.fromkeys(candidates):
+        try:
+            r = requests.post(f"{base}/models/{m}:generateContent", params={"key": key}, json=body, timeout=60)
+            r.raise_for_status()
+            text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            data = json.loads(text)
+            assert 30 <= len(data["script"].split()) <= 95
+            print("Script by", m)
+            return data
+        except Exception as e:  # noqa: BLE001
+            print(f"Gemini {m} failed: {str(e).split('?')[0]}", file=sys.stderr)
+    print("All Gemini models failed, using fallback script", file=sys.stderr)
+    return None
 
 
 def pick_script(history):
