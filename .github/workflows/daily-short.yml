@@ -12,8 +12,8 @@ concurrency: daily-short
 
 jobs:
   make-and-upload:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04   # pinned: faster, stable package mirror
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,7 +21,10 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install FFmpeg and fonts
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+        timeout-minutes: 8
+        run: |
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y -o Acquire::Retries=3 --no-install-recommends ffmpeg fonts-dejavu-core
       - run: pip install -r requirements.txt
       - name: Make and upload Short
         env:
