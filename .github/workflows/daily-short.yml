@@ -1,0 +1,48 @@
+name: Daily Stoic Short
+
+on:
+  schedule:
+    - cron: "17 14 * * *"   # every day 14:17 UTC = 7:47 PM Sri Lanka / 9:17 AM New York
+  workflow_dispatch:          # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency: daily-short
+
+jobs:
+  make-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install FFmpeg and fonts
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - run: pip install -r requirements.txt
+      - name: Make and upload Short
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_PRIVACY: ${{ vars.YT_PRIVACY || 'public' }}
+        run: python make_short.py --upload
+      - name: Keep a copy of the video (7 days)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: short
+          path: out/*/short.mp4
+          retention-days: 7
+      - name: Save topic history
+        run: |
+          git config user.name "shorts-bot"
+          git config user.email "shorts-bot@users.noreply.github.com"
+          git add history.json
+          git diff --cached --quiet || git commit -m "Log today's Short"
+          git push
