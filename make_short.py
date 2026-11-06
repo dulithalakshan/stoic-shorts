@@ -69,7 +69,7 @@ def gemini_script(history):
     recent = [h["topic"] for h in history[-60:]]
     prompt = f"""You write scripts for a YouTube Shorts channel about stoicism and discipline.
 Tone: calm, deep, serious, masculine-neutral, no cringe, no emojis, no hashtags in the script.
-Write ONE original voiceover script of 55-75 words (about 22-28 seconds spoken).
+Write ONE original voiceover script of 45-60 words (HARD LIMIT 60 words; about 20-28 seconds spoken).
 Open with a strong hook line. Use short punchy sentences. You may reference a real stoic
 (Marcus Aurelius, Seneca, Epictetus) but do not invent fake quotes; paraphrase ideas instead.
 End with a clear call to action line (not "subscribe").
@@ -102,7 +102,7 @@ Return JSON with keys:
             r.raise_for_status()
             text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
             data = json.loads(text)
-            assert 30 <= len(data["script"].split()) <= 95
+            assert 30 <= len(data["script"].split()) <= 66, "script too long"
             print("Script by", m)
             return data
         except Exception as e:  # noqa: BLE001
