@@ -267,7 +267,7 @@ def render(clips, voice, subs, total, out_path, workdir):
         p = workdir / "seg0.mp4"
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
                         "-i", f"gradients=s={W}x{H}:c0=0x05070a:c1=0x2a2f38:c2=0x0b0d10:speed=0.004:d={total:.2f}:r=30",
-                        "-vf", "noise=alls=12:allf=t,vignette=PI/4",
+                        "-vf", "noise=alls=4:allf=t,vignette=PI/4",
                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(p)], check=True)
         parts.append(p)
 
@@ -290,7 +290,7 @@ def render(clips, voice, subs, total, out_path, workdir):
     subs_esc = str(subs).replace(":", r"\:")
     cmd += ["-filter_complex", f"[0:v]ass='{subs_esc}'[vout];{afilter}",
             "-map", "[vout]", "-map", "[a]", "-t", f"{total:.2f}",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+            "-c:v", "libx264", "-preset", "medium", "-crf", "21", "-maxrate", "6M", "-bufsize", "12M", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out_path)]
     subprocess.run(cmd, check=True)
 
@@ -333,7 +333,7 @@ def main():
     args = ap.parse_args()
 
     OUT.mkdir(exist_ok=True)
-    stamp = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
     work = OUT / stamp
     work.mkdir()
 
