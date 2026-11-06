@@ -5,7 +5,8 @@ clips -> FFmpeg 1080x1920 video with burned-in captions -> YouTube upload.
 
 Env vars:
   GEMINI_API_KEY        (optional; falls back to built-in scripts)
-  PEXELS_API_KEY        (optional; falls back to a dark animated background)
+  PEXELS_API_KEY        (optional; stock footage)
+  PIXABAY_API_KEY       (optional; stock footage. With neither key: dark animated background)
   YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN   (needed for --upload)
   YT_PRIVACY            public | unlisted | private   (default: public)
   GEMINI_MODEL          default: gemini-2.5-flash
@@ -215,6 +216,39 @@ def pexels_clips(keywords, n, workdir):
     return clips
 
 
+def pixabay_clips(keywords, n, workdir, start=0):
+    key = os.getenv("PIXABAY_API_KEY")
+    if not key:
+        return []
+    clips, seen = [], set()
+    queries = list(keywords) + ["dark clouds", "storm ocean", "mountain fog", "night city rain"]
+    for q in queries:
+        if len(clips) >= n:
+            break
+        try:
+            r = requests.get("https://pixabay.com/api/videos/",
+                             params={"key": key, "q": q[:100], "per_page": 20, "safesearch": "true"},
+                             timeout=30)
+            r.raise_for_status()
+            hits = [h for h in r.json().get("hits", []) if h["id"] not in seen and h.get("duration", 0) >= 5]
+            random.shuffle(hits)
+            for h in hits[:1]:
+                v = h["videos"]
+                f = next((v[s] for s in ("medium", "large", "small") if v.get(s, {}).get("url")), None)
+                if not f:
+                    continue
+                dest = workdir / f"clip{start + len(clips)}.mp4"
+                with requests.get(f["url"], stream=True, timeout=120) as d:
+                    d.raise_for_status()
+                    with open(dest, "wb") as fh:
+                        shutil.copyfileobj(d.raw, fh)
+                seen.add(h["id"])
+                clips.append(dest)
+        except Exception as e:  # noqa: BLE001
+            print(f"Pixabay '{q}' failed: {e}", file=sys.stderr)
+    return clips
+
+
 # ----------------------------------------------------------------- render ----
 def render(clips, voice, subs, total, out_path, workdir):
     seg = total / max(len(clips), 1)
@@ -314,6 +348,8 @@ def main():
     make_captions(words, subs)
     n_clips = max(3, min(6, round(total / 5)))
     clips = pexels_clips(meta.get("keywords", []), n_clips, work)
+    if len(clips) < n_clips:
+        clips += pixabay_clips(meta.get("keywords", []), n_clips - len(clips), work, start=len(clips))
     video = work / "short.mp4"
     render(clips, voice, subs, total, video, work)
     (work / "meta.json").write_text(json.dumps(meta, indent=2))
