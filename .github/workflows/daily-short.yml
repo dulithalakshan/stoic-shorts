@@ -2,7 +2,7 @@ name: Daily Stoic Short
 
 on:
   schedule:
-    - cron: "17 14 * * *"   # every day 14:17 UTC = 7:47 PM Sri Lanka / 9:17 AM New York
+    - cron: "30 12 * * *"   # every day 14:17 UTC = 7:47 PM Sri Lanka / 9:17 AM New York
   workflow_dispatch:          # lets you run it manually from the Actions tab
 
 permissions:
